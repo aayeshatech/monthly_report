@@ -129,7 +129,7 @@ COMMODITIES = [
 def generate_monthly_report(selected_month, selected_year, report_type, selected_sector=None, selected_symbol=None):
     """Generate monthly astrological trading report"""
     # Set the seed for reproducibility based on month and year
-    random.seed(selected_month + selected_year)
+    random.seed(f"{selected_month}{selected_year}")
     
     # Determine number of days in month
     if selected_month == 2:
@@ -228,7 +228,11 @@ def generate_monthly_report(selected_month, selected_year, report_type, selected
         
         # Generate stock recommendations
         for symbol in sector["symbols"]:
-            entry_day = random.choice([d["day"] for d in report["keyDates"] if d["impact"] == "bullish"])
+            bullish_days = [d["day"] for d in report["keyDates"] if d["impact"] == "bullish"]
+            if not bullish_days:  # Handle case where there are no bullish days
+                bullish_days = random.sample(range(1, num_days+1), min(3, num_days))
+                
+            entry_day = random.choice(bullish_days)
             exit_day = min(entry_day + random.randint(1, 5), num_days)
             
             report["stockRecommendations"].append({
@@ -246,13 +250,16 @@ def generate_monthly_report(selected_month, selected_year, report_type, selected
         # Symbol-specific monthly report
         if selected_symbol in [s for sector in SECTORS for s in sector["symbols"]]:
             # It's a stock symbol
-            sector = next(s for s in SECTORS if selected_symbol in s["symbols"])
+            sector = next((s for s in SECTORS if selected_symbol in s["symbols"]), None)
             commodity = None
         else:
             # It's a commodity
             commodity = next((c for c in COMMODITIES if c["symbol"] == selected_symbol or c["global_symbol"] == selected_symbol), None)
             sector = None
         
+        if not sector and not commodity:
+            return None
+            
         report = {
             "type": "symbol",
             "month": selected_month,
@@ -308,7 +315,11 @@ def generate_monthly_report(selected_month, selected_year, report_type, selected
         num_patterns = random.randint(3, 5)
         for _ in range(num_patterns):
             # Find similar aspects in history
-            similar_aspect = random.choice(report["keyDates"][0]["aspects"])
+            if report["keyDates"] and report["keyDates"][0]["aspects"]:
+                similar_aspect = random.choice(report["keyDates"][0]["aspects"])
+            else:
+                similar_aspect = f"{random.choice(PLANETS)}-{random.choice(PLANETS)} {random.choice(ASPECTS)}"
+                
             year = selected_year - random.randint(1, 5)
             
             report["historicalPatterns"].append({
@@ -347,8 +358,8 @@ def display_monthly_report():
             # Combine stock and commodity symbols
             stock_symbols = [s for sector in SECTORS for s in sector["symbols"]]
             commodity_symbols = [c["symbol"] for c in COMMODITIES] + [c["global_symbol"] for c in COMMODITIES]
-            all_symbols = stock_symbols + commodity_symbols
-            selected_symbol = st.selectbox("Select Symbol", sorted(all_symbols))
+            all_symbols = sorted(list(set(stock_symbols + commodity_symbols)))  # Remove duplicates
+            selected_symbol = st.selectbox("Select Symbol", all_symbols)
         selected_sector = None
     
     if st.button("Generate Monthly Report", type="primary"):
@@ -452,7 +463,7 @@ def display_monthly_report():
                         return f'color: {color}; font-weight: bold'
                     
                     styled_df = df.style.applymap(color_impact, subset=['Impact'])
-                    st.dataframe(styled_df, use_container_width=True)
+                    st.dataframe(styled_df, use_container_width=True, hide_index=True)
                 
                 with tab3:
                     st.write("### Stock Trading Recommendations")
